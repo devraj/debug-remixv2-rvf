@@ -37,6 +37,34 @@ app.use(express.static("public", { maxAge: "1h" }));
 
 app.use(morgan("tiny"));
 
+// Add reverse proxy for local development, http-proxy-middleware
+// is development package and should not be loaded if we are 
+// in production.
+//
+// Removes the prefix so the container responds properly
+// pathRewrite: {'^/api' : ''} 
+//
+// This is not required here because AWS behaves differently
+// see the server project for details
+const proxyMiddleware = await import("http-proxy-middleware");
+if(process.env.NODE_ENV === "development") {
+  app.use(
+    '/api',
+    proxyMiddleware.createProxyMiddleware({
+      target: 'http://localhost:8000/',
+      changeOrigin: true,
+    })
+  );  
+  // Media bucket simulation
+  app.use(
+    '/media',
+    proxyMiddleware.createProxyMiddleware({
+      target: 'http://localhost:9000/media/',
+      changeOrigin: true,
+    })
+  );
+}
+
 app.all("*", async (...args) => {
   if (process.env.NODE_ENV === "development") {
     const handler = await createDevRequestHandler(initialBuild);
@@ -55,7 +83,7 @@ app.listen(port, async () => {
   console.log(`Express server listening on port ${port}`);
 
   if (process.env.NODE_ENV === "development") {
-    broadcastDevReady(initialBuild);
+    broadcastDevReady(initialBuild);  
   }
 });
 
